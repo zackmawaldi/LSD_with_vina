@@ -1,6 +1,6 @@
 '''
 Zack Mawaldi 2025-11-12
-From brendan hall's building script. Only submission script is edited.
+Modified from brendan hall's building script.
 /wynton/group/bks/work/bwhall61/docker_building/submit_building.py
 '''
 

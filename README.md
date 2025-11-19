@@ -35,3 +35,7 @@ Dock Smina (defualt --exhaustiveness 8)
 ```
 ../bin/smina --receptor elissa_rec.pdbqt --ligand ./output/1/built_pdbqts/L0.pdbqt --config elissa_rec.box.txt --out elissa_rec_L0_docked.pdbqt --seed 0 --atom_terms atom_terms.txt --log smina.log
 ```
+
+```
+python make_dock_job.py bundles.sdi dock_output --slurm --minutes-per-bundle 10 --vina-args="--receptor /nfs/home/zack/software/LSD_with_vina/test/elissa_rec.pdbqt --config /nfs/home/zack/software/LSD_with_vina/test/elissa_rec.box.txt"
+```
