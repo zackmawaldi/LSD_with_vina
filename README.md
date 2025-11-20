@@ -37,5 +37,22 @@ Dock Smina (defualt --exhaustiveness 8)
 ```
 
 ```
-python make_dock_job.py bundles.sdi dock_output --slurm --minutes-per-bundle 10 --vina-args="--receptor /nfs/home/zack/software/LSD_with_vina/test/elissa_rec.pdbqt --config /nfs/home/zack/software/LSD_with_vina/test/elissa_rec.box.txt"
+python make_dock_job.py bundles.sdi dock_output --slurm --minutes-per-bundle 10 --vina-args="--receptor /nfs/home/zack/software/LSD_with_vina/test/elissa_rec.pdbqt --config /nfs/home/zack/software/LSD_with_vina/test/elissa_rec.box.txt --exhaustiveness 1 --cpu=1"
+```
+
+---
+
+Prep protein
+```
+mk_prepare_receptor.py -i elissa_rec.crg_cut.pdb -o elissa_rec -p -v --box_size 20 20 20 --box_center 8.45 1.31 21.58
+```
+
+Building job
+```
+python ../make_building_job.py ./test.smi --sge --output_folder build_output --bundle_size 10 --minutes_per_mol 1
+```
+
+Docking
+```
+python ../make_dock_job.py bundles.sdi dock_output --minutes-per-bundle 10 --sge --vina-args="--receptor /wynton/home/shoichetlab/zack/software/LSD_with_vina/test/elissa_rec.pdbqt --config /wynton/home/shoichetlab/zack/software/LSD_with_vina/test/elissa_rec.box.txt --exhaustiveness 1 --cpu=1"
 ```

@@ -52,6 +52,7 @@ def write_sge_docking_job_array_script(output_folder, count, minutes_per_bundle,
 #$ -cwd
 #$ -j y
 #$ -o {log_folder}
+#$ -e {log_folder}
 #$ -t 1-{count}
 #$ -l h_rt={h_rt}
 
@@ -65,10 +66,10 @@ cd {subfolder}
 BKS_BIN="/nfs/home/zack/miniconda3/envs/vina/bin/"
 WYNTON_BIN="/wynton/home/shoichetlab/zack/miniconda3/envs/vina/bin/"
 
-if [[ -d "$BKS_BIN" ]]; then
-    BIN="$BKS_BIN"
-else
+if [[ -d "$WYNTON_BIN" ]]; then
     BIN="$WYNTON_BIN"
+else
+    BIN="$BKS_BIN"
 fi
 
 # Choose SCRATCH based on what exists
@@ -82,7 +83,7 @@ else
 fi
 
 # Make bundle-specific scratch
-TARGET_DIR="${{SCRATCH}}/${{USER}}/dock_vina_${{SLURM_ARRAY_TASK_ID}}_${{RANDOM}}"
+TARGET_DIR="${{SCRATCH}}/${{USER}}/dock_vina_${{SGE_TASK_ID}}_${{RANDOM}}"
 mkdir -p "$TARGET_DIR"
 
 # Read the bundle.tar.gz path
@@ -103,7 +104,7 @@ for f in ./poses/*; do
 
     # Strip the suffix "_out.pdbqt" from the filename
     base=$(basename "$f")
-    base=${base%_out.pdbqt}
+    base=${{base%_out.pdbqt}}
 
     echo "$base,$score" >> scores.csv
 done
@@ -146,10 +147,10 @@ cd "{subfolder}"
 BKS_BIN="/nfs/home/zack/miniconda3/envs/vina/bin/"
 WYNTON_BIN="/wynton/home/shoichetlab/zack/miniconda3/envs/vina/bin/"
 
-if [[ -d "$BKS_BIN" ]]; then
-    BIN="$BKS_BIN"
-else
+if [[ -d "$WYNTON_BIN" ]]; then
     BIN="$WYNTON_BIN"
+else
+    BIN="$BKS_BIN"
 fi
 
 # Choose SCRATCH based on what exists
