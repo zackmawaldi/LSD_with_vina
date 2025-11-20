@@ -1,58 +1,94 @@
-# LSD infrastructure for AutoDock Vina
-1. Building is done via: https://github.com/forlilab/molscrub
-The package builds via RDKit's ETKDGv3, enumerate tautomers, and enumerate pH corrections. One red flag is that it doesn't enumerate chiral centers.
+# LSD Infrastructure for AutoDock Vina
 
-```
-python building.py ./test/test.smi --slurm --output_folder output --bundle_size 10
-```
+## Conda Environment
 
-```
-scrub.py test_10.smi -o built_test_10.sdf --ph_low 7 --ph_high 8 --cpu 1 --write_failed_mols failed_built_test_10.smi --etkdg_rng_seed 0
+Activate the `vina` environment depending on your system. There's also how to build from scratch at the end.
 
-Scrub completed.
-Summary of what happened:
-Input molecules supplied: 10
-mols processed: 10, skipped by rdkit: 0, failed: 0
-nr isomers (tautomers and acid/base conjugates): 17 (avg. 1.700 per mol)
-nr conformers:  17 (avg. 1.000 per isomer, 1.700 per mol)
-```
-Split ligands
-```
-python ../1_split_smiles.py test.smi --output_folder output --bundle_size 10 --minutes_per_mol 1
+**Wynton**
+
+```bash
+conda activate /wynton/home/shoichetlab/zack/miniconda3/envs/vina/
 ```
 
-Prep protein
-```
-mk_prepare_receptor.py -i elissa_rec.crg_cut.pdb -o elissa_rec -p -v --box_size 20 20 20 --box_center 8.45 1.31 21.58
-```
+**BKS**
 
-Dock Vina (defualt --exhaustiveness 8)
-```
-../bin/vina --receptor elissa_rec.pdbqt --ligand ./output/1/built_pdbqts/L0.pdbqt --config elissa_rec.box.txt --out elissa_rec_L0_docked.pdbqt --seed 0
-```
-
-Dock Smina (defualt --exhaustiveness 8)
-```
-../bin/smina --receptor elissa_rec.pdbqt --ligand ./output/1/built_pdbqts/L0.pdbqt --config elissa_rec.box.txt --out elissa_rec_L0_docked.pdbqt --seed 0 --atom_terms atom_terms.txt --log smina.log
-```
-
-```
-python make_dock_job.py bundles.sdi dock_output --slurm --minutes-per-bundle 10 --vina-args="--receptor /nfs/home/zack/software/LSD_with_vina/test/elissa_rec.pdbqt --config /nfs/home/zack/software/LSD_with_vina/test/elissa_rec.box.txt --exhaustiveness 1 --cpu=1"
+```bash
+conda activate /nfs/home/zack/miniconda3/envs/vina/
 ```
 
 ---
 
-Prep protein
+## 0. Prepare Your Protein
+
+`mk_prepare_receptor.py` is located in:
+
 ```
-mk_prepare_receptor.py -i elissa_rec.crg_cut.pdb -o elissa_rec -p -v --box_size 20 20 20 --box_center 8.45 1.31 21.58
+miniconda3/envs/vina/bin/
 ```
 
-Building job
-```
-python ../make_building_job.py ./test.smi --sge --output_folder build_output --bundle_size 10 --minutes_per_mol 1
+Example command:
+
+```bash
+mk_prepare_receptor.py \
+  -i elissa_rec.crg_cut.pdb \
+  -o elissa_rec \
+  -p -v \
+  --box_size 20 20 20 \
+  --box_center 8.45 1.31 21.58
 ```
 
-Docking
+---
+
+## 1. Build Molecules
+
+Molecule building is done using **molscrub**:
+[https://github.com/forlilab/molscrub](https://github.com/forlilab/molscrub)
+
+This tool:
+
+* Uses RDKit’s **ETKDGv3** for conformer generation
+* Enumerates **tautomers**
+* Enumerates **protomers**
+* *Does not* enumerate all chiral centers (per their README). I think it only does **N** and **P** centers.
+
+### Example Building Job
+
+```bash
+python make_building_job.py ./test.smi \
+  --sge \
+  --output_folder build_output \
+  --bundle_size 10 \
+  --minutes_per_mol 1
 ```
-python ../make_dock_job.py bundles.sdi dock_output --minutes-per-bundle 10 --sge --vina-args="--receptor /wynton/home/shoichetlab/zack/software/LSD_with_vina/test/elissa_rec.pdbqt --config /wynton/home/shoichetlab/zack/software/LSD_with_vina/test/elissa_rec.box.txt --exhaustiveness 1 --cpu=1"
+
+---
+
+## 2. Dock Ligands
+
+Default Vina exhaustiveness is **8** unless overridden.
+
+### Example Docking Job
+
+```bash
+python make_dock_job.py bundles.sdi dock_output \
+  --minutes-per-bundle 10 \
+  --sge \
+  --vina-args="--receptor /wynton/home/shoichetlab/zack/software/LSD_with_vina/test/elissa_rec.pdbqt \
+               --config /wynton/home/shoichetlab/zack/software/LSD_with_vina/test/elissa_rec.box.txt \
+               --exhaustiveness 1 \
+               --cpu=1"
+```
+
+
+## Building environment
+```
+conda create -n vina python=3.9
+conda activate vina
+conda install -c conda-forge numpy swig boost-cpp libboost sphinx sphinx_rtd_theme gemmi
+pip install vina meeko molscrub scipy prody
+
+# Get vina and place it into conda env bin
+wget -O vina https://github.com/ccsb-scripps/AutoDock-Vina/releases/download/v1.2.7/vina_1.2.7_linux_x86_64
+chmod +x vina
+mv vina "$CONDA_PREFIX/bin/"
 ```
