@@ -41,147 +41,82 @@ def split_sdi(input_sdi_path, output_dir):
     return total_created
 
 
-def write_sge_docking_job_array_script(output_folder, count, minutes_per_bundle, vina_args, dock_engine="vina"):
+def write_docking_job_array_script(
+        output_folder,
+        count,
+        minutes_per_bundle,
+        vina_args,
+        scheduler,
+        dock_engine="vina"
+):
+    """
+    Write either an SGE or SLURM docking job array script.
+    """
+
+    scheduler = scheduler.lower()
+    if scheduler not in ("sge", "slurm"):
+        raise ValueError("scheduler must be 'sge' or 'slurm'")
+
     log_folder = os.path.join(output_folder, "logs")
     os.makedirs(log_folder, exist_ok=True)
 
-    subfolder = os.path.join(output_folder, "${SGE_TASK_ID}")
-    h_rt = minutes_to_h_rt(minutes_per_bundle)
-    
-    if dock_engine == "vina":
-        dock_command = f'$BIN/vina {vina_args} --batch $TARGET_DIR/built_pdbqts/ --dir poses --seed=420 > vina.log 2>&1'
-    elif dock_engine == "smina":
-        dock_command = f"""mkdir -p atom_terms
-    for lig in "$TARGET_DIR"/built_pdbqts/*.pdbqt; do
-        base=$(basename "$lig" .pdbqt)
-        echo "Docking $base..."
-        $BIN/smina \\
-            --receptor /nfs/home/zack/software/LSD_with_vina/test/elissa_rec.pdbqt \\
-            --config /nfs/home/zack/software/LSD_with_vina/test/elissa_rec.box.txt \\
-            --ligand "$lig" \\
-            --seed 420 \\
-            --out "./poses/${{base}}_out.pdbqt" \\
-            --atom_terms ./atom_terms/${{base}}_out.terms \\
-            {vina_args}
-    done
-    """
-    else:
-        raise ValueError(f"Unsupported docking engine: {dock_engine}")
+    # Scheduler-specific variables
+    if scheduler == "sge":
+        task_var = "${SGE_TASK_ID}"
+        subfolder = os.path.join(output_folder, task_var)
+        runtime = minutes_to_h_rt(minutes_per_bundle)
 
-
-    script = f"""#!/bin/bash
+        header = f"""#!/bin/bash
 #$ -cwd
 #$ -j y
 #$ -o {log_folder}
 #$ -e {log_folder}
 #$ -t 1-{count}
-#$ -l h_rt={h_rt}
-
-set -euo pipefail
-
-echo $HOSTNAME
-
-cd {subfolder}
-
-# Choose BIN based on what exists
-BKS_BIN="/nfs/home/zack/miniconda3/envs/vina/bin/"
-WYNTON_BIN="/wynton/home/shoichetlab/zack/miniconda3/envs/vina/bin/"
-
-if [[ -d "$WYNTON_BIN" ]]; then
-    BIN="$WYNTON_BIN"
-else
-    BIN="$BKS_BIN"
-fi
-
-# Choose SCRATCH based on what exists
-if [[ -d /scratch/ ]]; then
-    SCRATCH="/scratch/"
-elif [[ -d /wynton/scratch/ ]]; then
-    SCRATCH="/wynton/scratch/"
-else
-    echo "No SCRATCH directory found!"
-    exit 1
-fi
-
-# Make bundle-specific scratch
-TARGET_DIR="${{SCRATCH}}/${{USER}}/dock_vina_${{SGE_TASK_ID}}_${{RANDOM}}"
-mkdir -p "$TARGET_DIR"
-
-# Read the bundle.tar.gz path
-TARFILE=$(head -n 1 input.sdi)
-
-# Extract directly into SCRATCH path
-tar -xzvf "$TARFILE" -C "$TARGET_DIR"
-
-# Dock
-mkdir -p poses
-{dock_command}
-
-
-# Get scores.csv file
-for f in ./poses/*; do
-    # Extract score from the top model (line 2)
-    score=$(sed -n '2s/.*RESULT:[[:space:]]*\([-+0-9.eE]*\).*/\1/p' "$f")
-
-    # Strip the suffix "_out.pdbqt" from the filename
-    base=$(basename "$f")
-    base=${{base%_out.pdbqt}}
-
-    echo "$base,$score" >> scores.csv
-done
-
-# tar poses
-tar -czvf poses.tar.gz poses/
-
-# cleanup
-rm -r "$TARGET_DIR" poses
+#$ -l h_rt={runtime}
 """
+    else:  # SLURM
+        task_var = "${SLURM_ARRAY_TASK_ID}"
+        subfolder = os.path.join(output_folder, task_var)
+        runtime = minutes_to_h_rt(minutes_per_bundle)
 
-    with open("dock_array_job.sh", "w") as f:
-        f.write(script)
-    print(f"SGE docking array script written to dock_array_job.sh.\n"
-          f"Use 'qsub dock_array_job.sh' to submit.")
-
-
-def write_slurm_docking_job_array_script(output_folder, count, minutes_per_bundle, vina_args, dock_engine="vina"):
-    log_folder = os.path.join(output_folder, "logs")
-    os.makedirs(log_folder, exist_ok=True)
-
-    subfolder = os.path.join(output_folder, "${SLURM_ARRAY_TASK_ID}")
-
-    slurm_time = minutes_to_h_rt(minutes_per_bundle)
-
-    if dock_engine == "vina":
-        dock_command = f'$BIN/vina {vina_args} --batch $TARGET_DIR/built_pdbqts/ --dir poses --seed=420 > vina.log 2>&1'
-    elif dock_engine == "smina":
-        dock_command = f"""mkdir -p atom_terms
-    for lig in "$TARGET_DIR"/built_pdbqts/*.pdbqt; do
-        base=$(basename "$lig" .pdbqt)
-        echo "Docking $base..."
-        $BIN/smina \\
-            --receptor /nfs/home/zack/software/LSD_with_vina/test/elissa_rec.pdbqt \\
-            --config /nfs/home/zack/software/LSD_with_vina/test/elissa_rec.box.txt \\
-            --ligand "$lig" \\
-            --seed 420 \\
-            --out "./poses/${{base}}_out.pdbqt" \\
-            --atom_terms ./atom_terms/${{base}}_out.terms \\
-            {vina_args}
-    done
-
-    # Tar atom terms then remove untared folder
-    tar -czvf atom_terms.tar.gz atom_terms/
-    rm -r atom_terms
-    """
-    else:
-        raise ValueError(f"Unsupported docking engine: {dock_engine}")
-
-    script = f"""#!/bin/bash
+        header = f"""#!/bin/bash
 #SBATCH --job-name=docking
 #SBATCH --output={log_folder}/%A_%a.out
 #SBATCH --error={log_folder}/%A_%a.err
 #SBATCH --array=1-{count}
-#SBATCH --time={slurm_time}
+#SBATCH --time={runtime}
+"""
 
+    # Docking engine command -------------------------------------------
+    if dock_engine == "vina":
+        dock_command = (
+            f'$BIN/vina {vina_args} '
+            f'--batch $TARGET_DIR/built_pdbqts/ '
+            f'--dir poses --seed=420 > vina.log 2>&1'
+        )
+    elif dock_engine == "smina":
+        dock_command = f"""mkdir -p atom_terms
+for lig in "$TARGET_DIR"/built_pdbqts/*.pdbqt; do
+    base=$(basename "$lig" .pdbqt)
+    echo "Docking $base..."
+    $BIN/smina \\
+        --receptor /nfs/home/zack/software/LSD_with_vina/test/elissa_rec.pdbqt \\
+        --config /nfs/home/zack/software/LSD_with_vina/test/elissa_rec.box.txt \\
+        --ligand "$lig" \\
+        --seed 420 \\
+        --out "./poses/${{base}}_out.pdbqt" \\
+        --atom_terms ./atom_terms/${{base}}_out.terms \\
+        {vina_args}
+done
+# Tar atom terms then remove folder
+tar -czvf atom_terms.tar.gz atom_terms/
+rm -r atom_terms
+"""
+    else:
+        raise ValueError(f"Unsupported docking engine: {dock_engine}")
+
+    # Common script body ------------------------------------------------
+    common_body = f"""
 set -euo pipefail
 
 echo $HOSTNAME
@@ -209,7 +144,7 @@ else
 fi
 
 # Make bundle-specific scratch
-TARGET_DIR="${{SCRATCH}}/${{USER}}/dock_vina_${{SLURM_ARRAY_TASK_ID}}_${{RANDOM}}"
+TARGET_DIR="${{SCRATCH}}/${{USER}}/dock_vina_{task_var}_${{RANDOM}}"
 mkdir -p "$TARGET_DIR"
 
 # Read the bundle.tar.gz path
@@ -220,33 +155,37 @@ tar -xzvf "$TARFILE" -C "$TARGET_DIR"
 
 # Dock
 mkdir -p poses
-$BIN/vina {vina_args} --batch $TARGET_DIR/built_pdbqts/ --dir poses --seed=420 > vina.log 2>&1
+{dock_command}
 
-# Get scores.csv file
+# Extract scores into CSV
 rm -f scores.csv
 for f in ./poses/*; do
-    # Extract score from the top model (line 2)
     score=$(sed -n '2s/.*RESULT:[[:space:]]*\\([-+0-9.eE]*\\).*/\\1/p' "$f")
 
-    # Strip suffix "_out.pdbqt"
     base=$(basename "$f")
     base=${{base%_out.pdbqt}}
 
     echo "$base,$score" >> scores.csv
 done
 
-# tar poses
+# Tar poses
 tar -czvf poses.tar.gz poses/
 
-# cleanup
+# Cleanup
 rm -r "$TARGET_DIR" poses
 """
 
+    script = header + common_body
+
+    # Write output
     with open("dock_array_job.sh", "w") as f:
         f.write(script)
 
-    print(f"SLURM docking array script written to dock_array_job.sh.\n"
-          f"Use 'sbatch dock_array_job.sh' to submit.")
+    print(
+        f"{scheduler.upper()} docking array script written to dock_array_job.sh.\n"
+        f"Use '{'qsub' if scheduler=='sge' else 'sbatch'} dock_array_job.sh' to submit."
+    )
+
 
 
 def minutes_to_h_rt(minutes):
@@ -275,15 +214,13 @@ def main():
     parser.add_argument("--minutes-per-bundle", type=float, required=True, help="Estimated minutes per molecule for docking.")
     parser.add_argument("--vina-args", type=str, required=True, help="Arguments to pass directly to vina.")
 
+    parser.add_argument("--dock-engine", type=str, choices=["vina", "smina"], default="vina", help="Docking engine to use.")
 
     args = parser.parse_args()
 
     count = split_sdi(args.input_sdi, args.output_dir)
 
-    if args.scheduler == "sge":
-        write_sge_docking_job_array_script(args.output_dir, count, args.minutes_per_bundle, args.vina_args)
-    elif args.scheduler == "slurm":
-        write_slurm_docking_job_array_script(args.output_dir, count, args.minutes_per_bundle, args.vina_args)
+    write_docking_job_array_script(args.output_dir, count, args.minutes_per_bundle, args.vina_args, args.scheduler, dock_engine=args.dock_engine)
 
 
 if __name__ == "__main__":
