@@ -89,11 +89,7 @@ def write_docking_job_array_script(
 
     ### Docking engine command ###
     if dock_engine == "vina":
-        dock_command = (
-            f'$BIN/vina {vina_args} '
-            f'--batch $TARGET_DIR/built_pdbqts/ '
-            f'--dir poses --seed=420 > vina.log 2>&1'
-        )
+        dock_command = f'$BIN/vina {vina_args} --batch $TARGET_DIR/built_pdbqts/ --dir poses --seed=420 > vina.log 2>&1'
     elif dock_engine == "smina":
         dock_command = f"""mkdir -p atom_terms
 for lig in "$TARGET_DIR"/built_pdbqts/*.pdbqt; do
