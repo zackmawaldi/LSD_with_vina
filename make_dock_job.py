@@ -87,7 +87,7 @@ def write_docking_job_array_script(
 #SBATCH --time={runtime}
 """
 
-    # Docking engine command -------------------------------------------
+    ### Docking engine command ###
     if dock_engine == "vina":
         dock_command = (
             f'$BIN/vina {vina_args} '
@@ -115,7 +115,7 @@ rm -r atom_terms
     else:
         raise ValueError(f"Unsupported docking engine: {dock_engine}")
 
-    # Common script body ------------------------------------------------
+    ### Common script body ###
     common_body = f"""
 set -euo pipefail
 
