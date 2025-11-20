@@ -41,12 +41,33 @@ def split_sdi(input_sdi_path, output_dir):
     return total_created
 
 
-def write_sge_docking_job_array_script(output_folder, count, minutes_per_bundle, vina_args):
+def write_sge_docking_job_array_script(output_folder, count, minutes_per_bundle, vina_args, dock_engine="vina"):
     log_folder = os.path.join(output_folder, "logs")
     os.makedirs(log_folder, exist_ok=True)
 
     subfolder = os.path.join(output_folder, "${SGE_TASK_ID}")
     h_rt = minutes_to_h_rt(minutes_per_bundle)
+    
+    if dock_engine == "vina":
+        dock_command = f'$BIN/vina {vina_args} --batch $TARGET_DIR/built_pdbqts/ --dir poses --seed=420 > vina.log 2>&1'
+    elif dock_engine == "smina":
+        dock_command = f"""mkdir -p atom_terms
+    for lig in "$TARGET_DIR"/built_pdbqts/*.pdbqt; do
+        base=$(basename "$lig" .pdbqt)
+        echo "Docking $base..."
+        $BIN/smina \\
+            --receptor /nfs/home/zack/software/LSD_with_vina/test/elissa_rec.pdbqt \\
+            --config /nfs/home/zack/software/LSD_with_vina/test/elissa_rec.box.txt \\
+            --ligand "$lig" \\
+            --seed 420 \\
+            --out "./poses/${{base}}_out.pdbqt" \\
+            --atom_terms ./atom_terms/${{base}}_out.terms \\
+            {vina_args}
+    done
+    """
+    else:
+        raise ValueError(f"Unsupported docking engine: {dock_engine}")
+
 
     script = f"""#!/bin/bash
 #$ -cwd
@@ -94,7 +115,7 @@ tar -xzvf "$TARFILE" -C "$TARGET_DIR"
 
 # Dock
 mkdir -p poses
-$BIN/vina {vina_args} --batch $TARGET_DIR/built_pdbqts/ --dir poses --seed 0 > vina.log 2>&1
+{dock_command}
 
 
 # Get scores.csv file
@@ -122,13 +143,37 @@ rm -r "$TARGET_DIR" poses
           f"Use 'qsub dock_array_job.sh' to submit.")
 
 
-def write_slurm_docking_job_array_script(output_folder, count, minutes_per_bundle, vina_args):
+def write_slurm_docking_job_array_script(output_folder, count, minutes_per_bundle, vina_args, dock_engine="vina"):
     log_folder = os.path.join(output_folder, "logs")
     os.makedirs(log_folder, exist_ok=True)
 
     subfolder = os.path.join(output_folder, "${SLURM_ARRAY_TASK_ID}")
 
     slurm_time = minutes_to_h_rt(minutes_per_bundle)
+
+    if dock_engine == "vina":
+        dock_command = f'$BIN/vina {vina_args} --batch $TARGET_DIR/built_pdbqts/ --dir poses --seed=420 > vina.log 2>&1'
+    elif dock_engine == "smina":
+        dock_command = f"""mkdir -p atom_terms
+    for lig in "$TARGET_DIR"/built_pdbqts/*.pdbqt; do
+        base=$(basename "$lig" .pdbqt)
+        echo "Docking $base..."
+        $BIN/smina \\
+            --receptor /nfs/home/zack/software/LSD_with_vina/test/elissa_rec.pdbqt \\
+            --config /nfs/home/zack/software/LSD_with_vina/test/elissa_rec.box.txt \\
+            --ligand "$lig" \\
+            --seed 420 \\
+            --out "./poses/${{base}}_out.pdbqt" \\
+            --atom_terms ./atom_terms/${{base}}_out.terms \\
+            {vina_args}
+    done
+
+    # Tar atom terms then remove untared folder
+    tar -czvf atom_terms.tar.gz atom_terms/
+    rm -r atom_terms
+    """
+    else:
+        raise ValueError(f"Unsupported docking engine: {dock_engine}")
 
     script = f"""#!/bin/bash
 #SBATCH --job-name=docking
