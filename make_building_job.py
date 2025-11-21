@@ -114,7 +114,8 @@ fi
     --etkdg_rng_seed 0
 
 # Prepare ligands -> built_pdbqts/
-"$BIN/mk_prepare_ligand.py" -i built.sdf --multimol_outdir built_pdbqts
+# remove --rigid_macrocycles if you are docking macrocycles with Vina
+"$BIN/mk_prepare_ligand.py" --rigid_macrocycles -i built.sdf --multimol_outdir built_pdbqts
 
 # Compress the directory
 tar -czvf bundle.tar.gz built_pdbqts
@@ -183,7 +184,9 @@ fi
     --etkdg_rng_seed 0
 
 # Prepare ligands -> built_pdbqts/
-"$BIN/mk_prepare_ligand.py" -i built.sdf --multimol_outdir built_pdbqts
+# remove --rigid_macrocycles if you are docking macrocycles with Vina
+"$BIN/mk_prepare_ligand.py" --rigid_macrocycles -i built.sdf --multimol_outdir built_pdbqts
+
 
 # Compress the directory
 tar -czvf bundle.tar.gz built_pdbqts
