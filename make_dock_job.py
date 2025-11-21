@@ -96,13 +96,12 @@ for lig in "$TARGET_DIR"/built_pdbqts/*.pdbqt; do
     base=$(basename "$lig" .pdbqt)
     echo "Docking $base..."
     $BIN/smina \\
-        --receptor /nfs/home/zack/software/LSD_with_vina/test/elissa_rec.pdbqt \\
-        --config /nfs/home/zack/software/LSD_with_vina/test/elissa_rec.box.txt \\
         --ligand "$lig" \\
         --seed 420 \\
         --out "./poses/${{base}}_out.pdbqt" \\
         --atom_terms ./atom_terms/${{base}}_out.terms \\
-        {vina_args}
+        {vina_args} \\
+        >> smina.log 2>&1
 done
 # Tar atom terms then remove folder
 tar -czvf atom_terms.tar.gz atom_terms/
