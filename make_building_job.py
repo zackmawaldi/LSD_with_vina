@@ -85,6 +85,8 @@ def write_sge_job_array_script(output_folder, count, bundle_size, minutes_per_mo
 #$ -l h_rt={minutes_to_h_rt(minutes_per_mol * bundle_size + 2)}
 #$ -l mem_free=2.5G
 
+echo $HOSTNAME
+
 set -euo pipefail
 
 cd {subfolder};
@@ -105,6 +107,11 @@ if [[ -d "$BKS_BIN" ]]; then
 else
     BIN="$WYNTON_BIN"
 fi
+
+# Force 1 cpu
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+
 
 # Build conformers
 "$BIN/scrub.py" input.smi -o built.sdf \\
@@ -154,6 +161,8 @@ def write_slurm_job_array_script(output_folder, count, bundle_size, minutes_per_
 #SBATCH --mem=2500M
 #SBATCH --cpus-per-task=1
 
+echo $HOSTNAME
+
 set -euo pipefail
 
 cd "{subfolder}"
@@ -175,6 +184,11 @@ if [[ -d "$BKS_BIN" ]]; then
 else
     BIN="$WYNTON_BIN"
 fi
+
+# Force 1 cpu
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+
 
 # Build conformers
 "$BIN/scrub.py" input.smi -o built.sdf \\
@@ -236,7 +250,7 @@ def main():
                         help="The output folder to store the building results.")
     parser.add_argument("--bundle_size", type=int, default=1000,
                         help="The number of molecules to build per .db2.tgz bundle")
-    parser.add_argument("--minutes_per_mol", type=float, default=3,
+    parser.add_argument("--minutes_per_mol", type=int, default=3,
                         help="The time requested per molecule in minutes. Note that some molecules will have several " +
                         "protomers, so this should be well above the ~30 seconds per protomer that is typical.")
     parser.add_argument("--array_job_name", type=str, default="building_array_job.sh",

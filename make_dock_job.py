@@ -89,23 +89,45 @@ def write_docking_job_array_script(
 
     ### Docking engine command ###
     if dock_engine == "vina":
-        dock_command = f'$BIN/vina {vina_args} --batch $TARGET_DIR/built_pdbqts/ --dir poses --seed=420 > vina.log 2>&1'
+        dock_command = f'''
+$BIN/vina {vina_args} --batch $TARGET_DIR/built_pdbqts/ --dir poses --seed=420 > vina.log 2>&1
+        
+# Extract scores into CSV
+rm -f scores.csv
+for f in ./poses/*; do
+    score=$(sed -n '2s/.*RESULT:[[:space:]]*\\([-+0-9.eE]*\\).*/\\1/p' "$f")
+
+    base=$(basename "$f")
+    base=${{base%_out.pdbqt}}
+
+    echo "$base,$score" >> scores.csv
+done'''
     elif dock_engine == "smina":
-        dock_command = f"""mkdir -p atom_terms
+        dock_command = f"""
 for lig in "$TARGET_DIR"/built_pdbqts/*.pdbqt; do
     base=$(basename "$lig" .pdbqt)
     echo "Docking $base..."
     $BIN/smina \\
         --ligand "$lig" \\
         --seed 420 \\
-        --out "./poses/${{base}}_out.pdbqt" \\
-        --atom_terms ./atom_terms/${{base}}_out.terms \\
+        --out "./poses/${{base}}_out.sdf" \\
+        --atom_term_data \\
         {vina_args} \\
         >> smina.log 2>&1
 done
-# Tar atom terms then remove folder
-tar -czvf atom_terms.tar.gz atom_terms/
-rm -r atom_terms
+
+# Extract top pose scores into CSV
+rm -f scores.csv
+for f in ./poses/*; do
+    # Find the line AFTER ">  <minimizedAffinity>" and print it once (NR==2) 
+    score=$(awk '/> *<minimizedAffinity>/ {{getline; print; exit}}' "$f")
+
+    # Extract base name (assuming the same naming convention)
+    base=$(basename "$f")
+    base=${{base%_out.sdf}} # NOTE: Changed extension to .sdf
+
+    echo "$base,$score" >> scores.csv
+done
 """
     else:
         raise ValueError(f"Unsupported docking engine: {dock_engine}")
@@ -151,17 +173,6 @@ tar -xzvf "$TARFILE" -C "$TARGET_DIR"
 # Dock
 mkdir -p poses
 {dock_command}
-
-# Extract scores into CSV
-rm -f scores.csv
-for f in ./poses/*; do
-    score=$(sed -n '2s/.*RESULT:[[:space:]]*\\([-+0-9.eE]*\\).*/\\1/p' "$f")
-
-    base=$(basename "$f")
-    base=${{base%_out.pdbqt}}
-
-    echo "$base,$score" >> scores.csv
-done
 
 # Tar poses
 tar -czvf poses.tar.gz poses/
