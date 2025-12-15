@@ -107,6 +107,13 @@ done'''
 for lig in "$TARGET_DIR"/built_pdbqts/*.pdbqt; do
     base=$(basename "$lig" .pdbqt)
     echo "Docking $base..."
+
+    # Skip if output exists OR is 0 bytes
+    if [[ -f "./poses/${base}_out.sdf" || ! -s "./poses/${base}_out.sdf" ]]; then
+        echo "Skipping ${base} (output exists or is empty)"
+        continue
+    fi
+
     $BIN/smina \\
         --ligand "$lig" \\
         --seed 420 \\
@@ -139,6 +146,12 @@ set -euo pipefail
 echo $HOSTNAME
 
 cd "{subfolder}"
+
+# Quit if scores.csv archive already exists
+if [[ -f scores.csv ]]; then
+    echo "scores.csv already exists — exiting."
+    exit 0
+fi
 
 # Choose BIN based on what exists
 BKS_BIN="/nfs/home/zack/miniconda3/envs/vina/bin/"
